@@ -1,0 +1,19 @@
+{
+    "total_workers": 2,
+    "llm_engine": "ollama",
+    "models": 
+    {
+        "workers":
+        [
+            "llama3.2",
+            "qwen3:1.7b"
+        ],
+        "aggregator": "deepseek-r1:1.5b"
+    },
+    "aggregation_strategy": "judge",
+    "aggregation_system_prompt": "Create one response from <CANDIDATE> blocks using only their explicit content. Do not add facts, corrections, interpretations, explanations, or recommendations from outside the inputs. Preserve claims as written. When candidates overlap, merge the shared content; when they differ, include both without resolving the conflict. Do not mention the candidates or aggregation process.",
+    "generation_timeout_s": 1800,
+    "max_prompt_length_char": 50000,
+    "max_concurrent_jobs": 1,
+    "max_queued_jobs": 3
+}
