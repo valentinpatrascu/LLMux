@@ -89,6 +89,25 @@ curl http://localhost:8000/api/v1/jobs/job-id
 
 The job is processed asynchronously. Check the `done` field; when it is `true`, the completed response is available in the `response` field.
 
+### Cancel a job
+
+Cancel a submitted or running job with `POST /api/v1/jobs/{job_id}/cancel`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/jobs/job-id/cancel
+```
+
+A successful cancellation returns the job ID and its new status:
+
+```json
+{
+  "id": "job-id",
+  "job_status": "cancelled"
+}
+```
+
+Cancellation is idempotent, so cancelling an already cancelled job also succeeds. Completed and failed jobs cannot be cancelled. A cancelled job is terminal and is returned with `done` set to `true` when its status is retrieved.
+
 ## Configuration
 Configuration can be found under [`config.json`](llmux/core/config.json). 
 
@@ -109,7 +128,7 @@ The project is suitable for local development and self-hosted Docker deployments
 
 ### Current status
 
-- [x] Asynchronous API for submitting and polling LLM jobs.
+- [x] Asynchronous API for submitting, polling, and cancelling LLM jobs.
 - [x] Configurable Ollama worker models with judge-based response aggregation.
 - [x] Ollama backend integration with automatic model pulling.
 - [x] PostgreSQL persistence for jobs, outputs, metrics, failures, conversations, and request logs.
