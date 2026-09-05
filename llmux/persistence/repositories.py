@@ -36,6 +36,8 @@ class JobRepository:
             return job
 
     async def update_job_record_details(self, request_id: UUID, **values) -> None:
+        if "job_status" in values:
+            raise ValueError("Job status must be changed through a lifecycle transition method")
         async with self.session_factory() as db:
             result = await db.execute(
                 update(JobRecord)

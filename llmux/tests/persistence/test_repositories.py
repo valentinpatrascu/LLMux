@@ -37,6 +37,20 @@ async def test_job_repository_lifecycle(test_engine, setup_database):
 
 
 @pytest.mark.anyio
+async def test_update_job_record_details_rejects_status_changes(test_engine):
+    jobs, _ = repositories(test_engine)
+
+    with pytest.raises(
+        ValueError,
+        match="Job status must be changed through a lifecycle transition method",
+    ):
+        await jobs.update_job_record_details(
+            uuid7(),
+            job_status=JobStatus.COMPLETED,
+        )
+
+
+@pytest.mark.anyio
 async def test_conversation_repository_lifecycle(test_engine, setup_database):
     _, conversations = repositories(test_engine)
     request_id = uuid7()
