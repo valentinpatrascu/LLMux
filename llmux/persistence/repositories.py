@@ -170,7 +170,7 @@ class JobRepository:
                 raise JobCancelledError(f"Job already cancelled for request_id={request_id}")
         
     async def fail_unfinished_jobs(self) -> int:
-        failing_statuses = [status for status in JobStatus if status not in {JobStatus.COMPLETED, JobStatus.FAILED}]
+        failing_statuses = [status for status in JobStatus if status not in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}]
         async with self.session_factory() as db:
             result = await db.execute(
                 update(JobRecord)
