@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock, Mock, call
+from unittest.mock import ANY, AsyncMock, Mock
 from uuid import uuid7
 
 import pytest
@@ -20,7 +20,9 @@ def make_aggregator():
     backend = Mock(generate_response=AsyncMock())
     jobs = Mock(
         get_job_record=AsyncMock(),
-        update_job_record=AsyncMock(),
+        update_job_record_details=AsyncMock(),
+        update_job_record_status=AsyncMock(),
+        complete_job=AsyncMock(),
     )
     conversations = Mock(add_conversation=AsyncMock())
     return JudgeAggregator(config, backend, jobs, conversations), backend, jobs, conversations
@@ -75,20 +77,21 @@ async def test_aggregate_success():
         prompt="Question",
         response="Final answer",
     )
-    assert jobs.update_job_record.await_args_list == [
-        call(
-            request_id,
-            aggregation_strategy=AggregationStrategy.JUDGE,
-            aggregation_model="judge-model",
-        ),
-        call(request_id, job_status=JobStatus.AGGREGATING),
-        call(
-            request_id=request_id,
-            job_status=JobStatus.COMPLETED,
-            aggregation_output=result.model_dump(),
-            finished_at=ANY,
-        ),
-    ]
+    jobs.update_job_record_details.assert_awaited_once_with(
+        request_id,
+        aggregation_strategy=AggregationStrategy.JUDGE,
+        aggregation_model="judge-model",
+    )
+    jobs.update_job_record_status.assert_awaited_once_with(
+        request_id,
+        job_status=JobStatus.AGGREGATING,
+    )
+    jobs.complete_job.assert_awaited_once_with(
+        request_id=request_id,
+        job_status=JobStatus.COMPLETED,
+        aggregation_output=result.model_dump(),
+        finished_at=ANY,
+    )
 
 
 @pytest.mark.anyio
@@ -104,7 +107,4 @@ async def test_aggregate_failure_does_not_complete_job():
         await aggregator.aggregate(uuid7())
 
     conversations.add_conversation.assert_not_awaited()
-    assert all(
-        item.kwargs.get("job_status") != JobStatus.COMPLETED
-        for item in jobs.update_job_record.await_args_list
-    )
+    jobs.complete_job.assert_not_awaited()

@@ -41,6 +41,9 @@ class BrokenRepository:
     async def get_conversation(self, request_id: UUID) -> None:
         raise SQLAlchemyError()
 
+    async def cancel_job(self, request_id: UUID) -> None:
+        raise SQLAlchemyError()
+
 
 @pytest.mark.anyio
 async def test_submit_job(client: AsyncClient, test_engine):
@@ -120,6 +123,7 @@ async def test_submit_job_rejects_when_server_is_at_capacity(
         (JobStatus.PARTIAL, False),
         (JobStatus.AGGREGATING, False),
         (JobStatus.FAILED, True),
+        (JobStatus.CANCELLED, True),
     ],
 )
 async def test_get_job_status(
@@ -213,3 +217,87 @@ async def test_get_job_handles_database_error(
     response = await client.get(f"/api/v1/jobs/{job_id}")
 
     assert response.status_code == 503
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "job_status",
+    [
+        JobStatus.SUBMITTED,
+        JobStatus.PROCESSING,
+        JobStatus.PARTIAL,
+        JobStatus.AGGREGATING,
+    ],
+)
+async def test_cancel_job(
+    client: AsyncClient,
+    test_engine,
+    job_status: JobStatus,
+):
+    job_id = uuid7()
+    await create_job(test_engine, job_id, job_status=job_status)
+
+    response = await client.post(f"/api/v1/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": str(job_id),
+        "job_status": JobStatus.CANCELLED.value,
+    }
+
+    async with AsyncSession(test_engine) as session:
+        stored_status = await session.scalar(
+            select(JobRecord.job_status).where(JobRecord.request_id == job_id)
+        )
+
+    assert stored_status == JobStatus.CANCELLED
+
+
+@pytest.mark.anyio
+async def test_cancel_job_is_idempotent(client: AsyncClient, test_engine):
+    job_id = uuid7()
+    await create_job(test_engine, job_id, job_status=JobStatus.CANCELLED)
+
+    response = await client.post(f"/api/v1/jobs/{job_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["job_status"] == JobStatus.CANCELLED.value
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "job_status",
+    [JobStatus.COMPLETED, JobStatus.FAILED],
+)
+async def test_cancel_job_rejects_terminal_job(
+    client: AsyncClient,
+    test_engine,
+    job_status: JobStatus,
+):
+    job_id = uuid7()
+    await create_job(test_engine, job_id, job_status=job_status)
+
+    response = await client.post(f"/api/v1/jobs/{job_id}/cancel")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "Job cannot be cancelled because it is already in terminal state."
+    )
+
+
+@pytest.mark.anyio
+async def test_cancel_unknown_job(client: AsyncClient):
+    response = await client.post(f"/api/v1/jobs/{uuid7()}/cancel")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found."
+
+
+@pytest.mark.anyio
+async def test_cancel_job_handles_database_error(client: AsyncClient):
+    app.dependency_overrides[get_job_repository] = BrokenRepository
+
+    response = await client.post(f"/api/v1/jobs/{uuid7()}/cancel")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Could not get the job. Please retry."

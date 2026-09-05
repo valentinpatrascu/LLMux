@@ -5,7 +5,7 @@ from uuid import uuid7
 import pytest
 
 from common.enums import FailureCodes, JobStatus, LLMEngine
-from common.exceptions import GenerationError, GenerationTimeout
+from common.exceptions import GenerationError, GenerationTimeout, JobCancelledError
 from common.models import GenerationMetrics, GenerationResponse
 from common.concurrency import BoundedSemaphore
 from scheduler.job_scheduler import Scheduler
@@ -19,7 +19,11 @@ def make_scheduler():
     )
     backend = Mock(generate_response=AsyncMock())
     aggregator = Mock(aggregate=AsyncMock())
-    jobs = Mock(update_job_record=AsyncMock())
+    jobs = Mock(
+        update_job_record_details=AsyncMock(),
+        update_job_record_status=AsyncMock(),
+        fail_job=AsyncMock(),
+    )
     return Scheduler(config, backend, aggregator, jobs), backend, aggregator, jobs
 
 
@@ -49,7 +53,7 @@ async def test_dispatch_success():
         call(prompt="Prompt", model="model-a", llm_engine=LLMEngine.OLLAMA),
         call(prompt="Prompt", model="model-b", llm_engine=LLMEngine.OLLAMA),
     ]
-    assert jobs.update_job_record.await_args_list[-1].kwargs[
+    assert jobs.update_job_record_details.await_args_list[-1].kwargs[
         "worker_model_outputs"
     ] == [
         {
@@ -89,7 +93,7 @@ async def test_dispatch_failure(error: Exception, code: FailureCodes):
 
     await scheduler.dispatch("Prompt", uuid7(), make_semaphore())
 
-    failure = jobs.update_job_record.await_args_list[-1]
+    failure = jobs.fail_job.await_args
     assert failure.kwargs["job_status"] == JobStatus.FAILED
     assert failure.kwargs["failure"]["code"] == code
     assert failure.kwargs["finished_at"].tzinfo is not None
@@ -100,8 +104,23 @@ async def test_dispatch_failure(error: Exception, code: FailureCodes):
 async def test_dispatch_ignores_failure_storage_error():
     scheduler, backend, _, jobs = make_scheduler()
     backend.generate_response.side_effect = GenerationError()
-    jobs.update_job_record.side_effect = [None, None, RuntimeError()]
+    jobs.fail_job.side_effect = RuntimeError()
 
     await scheduler.dispatch("Prompt", uuid7(), make_semaphore())
 
-    assert jobs.update_job_record.await_count == 3
+    jobs.fail_job.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_dispatch_stops_when_job_was_cancelled():
+    scheduler, backend, aggregator, jobs = make_scheduler()
+    jobs.update_job_record_status.side_effect = JobCancelledError()
+
+    await scheduler.dispatch("Prompt", uuid7(), make_semaphore())
+
+    backend.generate_response.assert_not_awaited()
+    aggregator.aggregate.assert_not_awaited()
+    assert jobs.update_job_record_details.await_count == 2
+    assert jobs.update_job_record_details.await_args.kwargs[
+        "finished_at"
+    ].tzinfo is not None

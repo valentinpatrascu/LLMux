@@ -2,7 +2,7 @@ import os
 from collections.abc import AsyncGenerator
 
 os.environ["DATABASE_URL"] = (
-    "postgresql+psycopg://app_user:valentin@localhost/test_app"
+    "postgresql+psycopg://app_user:app_pass@localhost/test_app"
 )
 
 from uuid import UUID
