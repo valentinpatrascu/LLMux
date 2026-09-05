@@ -8,6 +8,7 @@ class JobStatus(str, Enum):
     AGGREGATING = "aggregating"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class LLMEngine(str, Enum):

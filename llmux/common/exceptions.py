@@ -10,3 +10,9 @@ class GenerationError(Exception):
 class ServerCapacityExceeded(Exception):
     pass
 
+class JobCancelledError(Exception):
+    pass
+
+class JobTerminalStateError(Exception):
+    pass
+

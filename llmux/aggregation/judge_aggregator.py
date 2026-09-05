@@ -40,13 +40,13 @@ class JudgeAggregator:
     async def set_complete(self, request_id: UUID, prompt: str, response: str, aggregation_output: dict, finished_at: datetime) -> None:
         # TODO: bind them under the same session
         await self.conversation_repository.add_conversation(request_id=request_id, prompt=prompt, response=response)
-        await self.job_repository.update_job_record(request_id=request_id, job_status=JobStatus.COMPLETED, aggregation_output=aggregation_output, finished_at=finished_at)
+        await self.job_repository.complete_job(request_id=request_id, job_status=JobStatus.COMPLETED, aggregation_output=aggregation_output, finished_at=finished_at)
 
     async def store_aggregation_config(self, request_id: UUID, aggregation_strategy: AggregationStrategy, aggregation_model: str) -> None:
-        await self.job_repository.update_job_record(request_id, aggregation_strategy=aggregation_strategy, aggregation_model=aggregation_model)
+        await self.job_repository.update_job_record_details(request_id, aggregation_strategy=aggregation_strategy, aggregation_model=aggregation_model)
     
     async def mark_status(self, request_id: UUID, job_status: JobStatus) -> None:
-        await self.job_repository.update_job_record(request_id, job_status=job_status)
+        await self.job_repository.update_job_record_status(request_id, job_status=job_status)
 
     async def aggregate(self, request_id: UUID) -> None:
         config = self.config_provider.get_config()

@@ -22,6 +22,9 @@ class PromptSubmit(BaseModel):
 class JobSubmit(BaseModel):
     id: UUID7
 
+class JobCancellation(BaseModel):
+    id: UUID7
+    job_status: JobStatus
 
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

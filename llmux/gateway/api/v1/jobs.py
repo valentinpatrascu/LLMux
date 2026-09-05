@@ -11,9 +11,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from common.enums import JobStatus, FailureCodes
 from common.models import FailureDetails
-from common.exceptions import EntityNotFoundError
+from common.exceptions import EntityNotFoundError, JobCancelledError, JobTerminalStateError
 from persistence.repositories import JobRepository, get_job_repository, ConversationRepository, get_conversation_repository
-from gateway.api.v1.schemas import JobSubmit, JobResponse, PromptSubmit
+from gateway.api.v1.schemas import JobSubmit, JobResponse, PromptSubmit, JobCancellation
 from scheduler.job_scheduler import Scheduler, get_scheduler
 
 
@@ -127,4 +127,33 @@ async def get_job(
         'finished_at': job.finished_at
     }
 
+@router.post("/{job_id}/cancel", response_model=JobCancellation, status_code=status.HTTP_200_OK)
+async def cancel_job(
+    job_id: UUID,
+    job_repository: Annotated[JobRepository, Depends(get_job_repository)],
+):
+    try:
+        await job_repository.cancel_job(request_id=job_id)
+    except SQLAlchemyError:
+        logger.exception("Could not get job", extra={"request_id": str(job_id)})
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not get the job. Please retry.",
+        )
+    except EntityNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Job not found."
+        )
+    except JobTerminalStateError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, 
+            detail="Job cannot be cancelled because it is already in terminal state."
+        )
+    except JobCancelledError:
+        logger.info("Job already cancelled", extra={"request_id": str(job_id)})
+
+    return JobCancellation(id=job_id, job_status=JobStatus.CANCELLED)
+
+    
 
