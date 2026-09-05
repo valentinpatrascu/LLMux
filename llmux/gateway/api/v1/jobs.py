@@ -119,7 +119,7 @@ async def get_job(
         "prompt": job.prompt,
         'created_at': job.created_at,
         'job_status': job.job_status,
-        'done': job.job_status in {JobStatus.COMPLETED,JobStatus.FAILED},
+        'done': job.job_status in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED},
         'failure': job.failure,
         'llm_engine': job.llm_engine,
         'aggregation_strategy': job.aggregation_strategy,
