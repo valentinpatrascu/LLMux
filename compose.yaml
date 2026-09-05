@@ -33,6 +33,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       CONFIG_PATH: /app/core/config.json
+      OLLAMA_HOST: http://ollama:11434
     command: ["alembic", "upgrade", "head"]
     depends_on:
       db:
